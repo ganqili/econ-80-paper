@@ -33,9 +33,8 @@ Crosswalks:
 2. FIPS to PUMA in "/data/raw/school_mode": xwalk_fips_to_nces.csv
 3. FIPS to State in "/data/raw/school_mode": xwalk_fips_to_state.csv
 
-Note: See README for more on data sources. 
+Note: See Table 1 in paper for more on data sources. 
 */
-
 
 * prepare FIPS to PUMA crosswalk
 cd "`path_econ80'/data/raw/household"
@@ -97,10 +96,10 @@ cd "`path_econ80'/data/temp"
 save xwalk_fips_to_state, replace
 
 
+
 /*
 01. Clean hopsitalization data
 */
-
 
 * clean county population data
 cd "`path_econ80'/data/raw/hospitalization"
@@ -179,11 +178,9 @@ save hospitalization_weekly_fips, replace
 
 
 
-
 /*
 02. Clean household data
 */
-
 
 * import household data
 cd "`path_econ80'/data/raw/household"
@@ -331,7 +328,6 @@ save household_fips, replace
 03. Clean school mode data
 */
 
-
 * import CSDH school mode data 
 cd "`path_econ80'/data/raw/school_mode"
 import delimited using csdh_school.csv, clear
@@ -425,8 +421,6 @@ save school_mode_monthly_fips, replace
 04. Clean community mobility data
 */
 
-
-
 * import mobility data
 cd "`path_econ80'/data/raw/mobility"
 import delimited using mobility.csv, clear
@@ -466,11 +460,9 @@ save mobility_weekly_fips, replace
 
 
 
-
 /*
 05. Clean urbanicity 
 */
-
 
 * import urbanicity data
 cd "`path_econ80'/data/raw/urbanicity"
@@ -496,6 +488,5 @@ label var urban_share "Urbanicity"
 * save cleaned urbanicity data
 cd "`path_econ80'/data/clean"
 save urbanicity_fips, replace
-
 
 

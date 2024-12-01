@@ -15,6 +15,8 @@ log using "`path_econ80'/outputs/logs/03_graph.log", replace
 * author: Ganqi Li (ganqi.li.25@dartmouth.edu)
 * updated: Nov 26, 2024 
 
+
+
 /*
 00. Datasets required
 
@@ -26,9 +28,8 @@ Data:
 cd "`path_econ80'/data/merged"
 use e80_merged, clear
 
-* follow Ertem et al. in focusing on -5 to 20 weeks from start of school
+* subset data to entire school year, or 36 weeks
 keep if (event_time >= -5) & (event_time <= 36)
-// keep if (event_time >= -5) & (event_time <= 13)
 
 * check data availability by week
 tab event_time if adult_covid_week_avg_100k != .
@@ -46,7 +47,6 @@ summ week_sunday, format
 01. Explore correlations of multi shares
 */
 
-/*
 preserve
 collapse (mean) share_multigen_acs share_multigen_proxy, by(fips)
 twoway scatter share_multigen_proxy share_multigen_acs, ///
@@ -60,7 +60,7 @@ twoway scatter share_multigen_proxy share_multigen_acs, ///
 cd "`path_econ80'/outputs/graphs/graph_gph"
 graph save acs_proxy_corr, replace
 restore
-*/
+
 
 
 /*
@@ -108,11 +108,6 @@ twoway ///
     title("Hospitalization by Share of Multigenerational Households (ACS)") ///
 	nodraw
 	
-// 	ylabel(0(5)25) ///
-// 	xlabel(-4(1)12) ///
-// 	xscale(range(-4.5 12.5)) ///
-// 	yscale(range(0 26.5)) ///
-	
 cd "`path_econ80'/outputs/graphs/graph_gph"
 graph save hospitalization_by_multigen_acs, replace
 restore 
@@ -157,12 +152,6 @@ twoway ///
     xtitle("Weeks from school opening") ///
     title("Hospitalization by Share of Households with Ages 5-18 and 65+") ///
 	nodraw
-	
-
-// 	ylabel(0(5)25) ///
-// 	xlabel(-4(1)12) ///
-// 	xscale(range(-4.5 12.5)) ///
-// 	yscale(range(0 26.5)) ///
 
 cd "`path_econ80'/outputs/graphs/graph_gph"
 graph save hospitalization_by_multigen_proxy, replace
@@ -218,11 +207,6 @@ twoway ///
     xlabel(-5(5)36) ///
     xscale(range(-5.5 36.5))
 
-// 	ylabel(0(5)25) ///
-//     xlabel(-4(1)12) ///
-// 	xscale(range(-4.5 12.5)) ///
-// 	yscale(range(0 26.5)) ///
-
 * save trend graph
 cd "`path_econ80'/outputs/graphs/graph_gph"
 graph save hospitalization_by_weekly_mode_rcap, replace
@@ -272,11 +256,6 @@ twoway ///
 	note("Note: Error bars represent 95% confidence intervals.") ///
 	xlabel(-5(5)36) /// 
     xscale(range(-5.5 36.5))
-	
-// 	ylabel(0(5)25) ///
-//     xlabel(-4(1)12) ///
-// 	xscale(range(-4.5 12.5)) ///
-// 	yscale(range(0 26.5)) ///
 
 * save trend graph
 cd "`path_econ80'/outputs/graphs/graph_gph"
@@ -305,9 +284,6 @@ twoway (line adult_covid_week_avg_100k event_time if county_dominant_mode == 0, 
 	title("Mean Adult Hospitalization Level by School Mode") ///
 	graphregion(color(white)) ///
 	nodraw
-	
-// 	ylabel(0(5)25) ///
-// 	xlabel(-4(1)12) ///
 
 * save trend graph
 cd "`path_econ80'/outputs/graphs/graph_gph"
@@ -325,9 +301,6 @@ twoway (line d_adult_covid_week_avg_100k event_time if county_dominant_mode == 0
 	title("Change in Mean Adult Hospitalization Level by School Mode") ///
 	graphregion(color(white)) ///
 	nodraw
-	
-// 	ylabel(-5(5)10) ///
-// 	xlabel(-4(1)12) ///
 
 graph save d_hospitalization_by_mode, replace
 restore
@@ -489,4 +462,5 @@ twoway ///
 
 graph save proxy_multigen_scatter, replace
 restore
+
 

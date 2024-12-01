@@ -15,6 +15,8 @@ log using "`path_econ80'/outputs/logs/04_analysis.log", replace
 * author: Ganqi Li (ganqi.li.25@dartmouth.edu)
 * updated: Nov 27, 2024 
 
+
+
 /*
 00. Datasets required
 
@@ -208,7 +210,8 @@ coefplot (hybrid_all, label("Hybrid") mlcolor(black) mcolor(gs12) ///
     ytitle("Average marginal effect w/ interaction") ///
     msymbol(d) ///
 
-/* An effect of 0.05 represents a 5% higher hospitalization count on average relative to the counties with online as the dominant school mode. */
+/* An effect of 0.05 represents a 5% higher hospitalization count on average 
+relative to the counties with online as the dominant school mode. */
 
 * save graph for school mode effect
 cd "`path_econ80'/outputs/graphs/analysis_gph"
