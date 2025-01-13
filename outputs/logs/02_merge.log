@@ -1,0 +1,318 @@
+----------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/thomasli/Desktop/econ-80-paper/outputs/logs/02_merge.log
+  log type:  text
+ opened on:  30 Nov 2024, 08:41:37
+
+. 
+. * program to merge clean date files for econ 80 paper
+. * author: Ganqi Li (ganqi.li.25@dartmouth.edu)
+. * updated: Nov 26, 2024 
+. 
+. /*
+> 00. Datasets required
+> 
+> Data: 
+> 1. hospitalization in "/data/clean": hospitalization_weekly_fips.dta
+> 2. mutligen proportions in "/data/clean": household_fips.dta
+> 3. covid-19 school mode in "/data/clean": school_mode_monthly_fips.dta
+> 4. county mobility in "/data/clean": mobility_weekly_fips.dta
+> 5. county urbanicity in "/data/clean": urbanicity_fips.dta
+> */
+. 
+. 
+. 
+. /*
+> 01. Merge clean data
+> */
+. 
+. * open hospitalization data
+. cd "`path_econ80'/data/clean"
+/Users/thomasli/Desktop/econ-80-paper/data/clean
+
+. use hospitalization_weekly_fips, clear
+
+. 
+. * generate hospitalization per 100k population
+. gen adult_covid_week_avg_100k = adult_covid_week_avg * ///
+>         100000 / population
+
+. gen pediatric_covid_week_avg_100k = pediatric_covid_week_avg * ///
+>         100000 / population
+
+. drop adult_covid_week_avg pediatric_covid_week_avg
+
+. 
+. * merge with multigen data
+. merge m:1 fips using household_fips 
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                        63,358
+        from master                    62,695  (_merge==1)
+        from using                        663  (_merge==2)
+
+    Matched                           450,766  (_merge==3)
+    -----------------------------------------
+
+. keep if _merge == 3
+(63,358 observations deleted)
+
+. drop _merge
+
+. 
+. * merge with weekly mobility data
+. merge 1:1 fips week_sunday using mobility_weekly_fips
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                       427,026
+        from master                   375,562  (_merge==1)
+        from using                     51,464  (_merge==2)
+
+    Matched                            75,204  (_merge==3)
+    -----------------------------------------
+
+. drop if _merge == 2
+(51,464 observations deleted)
+
+. drop _merge
+
+. 
+. * merge with school mode data
+. drop if week_sunday == .
+(0 observations deleted)
+
+. gen month = mofd(week_sunday)
+
+. format month %tm 
+
+. drop if month < tm(2020m6)
+(19,636 observations deleted)
+
+. drop if month > tm(2021m6)
+(312,180 observations deleted)
+
+. 
+. merge m:1 fips month using school_mode_monthly_fips
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                        61,636
+        from master                    55,056  (_merge==1)
+        from using                      6,580  (_merge==2)
+
+    Matched                            63,894  (_merge==3)
+    -----------------------------------------
+
+. 
+. * fill in zeros for instruction style during pre-school-year
+. foreach var in share_inperson share_hybrid share_virtual openness_index {
+  2.         replace `var' = 0 if (`var' == .) & (month < tm(2020m12))
+  3. }
+(29,664 real changes made)
+(29,664 real changes made)
+(29,664 real changes made)
+(29,664 real changes made)
+
+. 
+. * drop periods in school year without school mode
+. drop if openness_index == .
+(25,392 observations deleted)
+
+. 
+. * classify county by overall school mode
+. egen county_dominant_mode = median(dominant_mode), by(fips)
+(7,308 missing values generated)
+
+. tab county_dominant_mode, m
+
+county_domi |
+  nant_mode |      Freq.     Percent        Cum.
+------------+-----------------------------------
+          0 |      9,553        9.54        9.54
+         .5 |      1,004        1.00       10.54
+          1 |     33,484       33.44       43.98
+        1.5 |        798        0.80       44.78
+          2 |     47,991       47.92       92.70
+          . |      7,308        7.30      100.00
+------------+-----------------------------------
+      Total |    100,138      100.00
+
+. 
+. * re-classify counties even-split on weekly dominant instructional modes
+. ********************************************************************************
+. replace county_dominant_mode = 0 if county_dominant_mode == 0.5
+(1,004 real changes made)
+
+. replace county_dominant_mode = 1 if county_dominant_mode == 1.5
+(798 real changes made)
+
+. // replace county_dominant_mode = 1 if county_dominant_mode == 0.5
+. // replace county_dominant_mode = 2 if county_dominant_mode == 1.5
+. ********************************************************************************
+. sort fips week_sunday
+
+. 
+. * generate weeks from school opening
+. by fips (week_sunday), sort: gen seq = _n // create sequence within fips
+
+. by fips: egen first_event_row = min(cond(dominant_mode != ., _n, .))
+(7,308 missing values generated)
+
+. /* This flags first row where school mode is non-missing withine each fips. */
+. 
+. by fips: gen event_time = _n - first_event_row 
+(7,308 missing values generated)
+
+. /* First week of school opening set as 0. */
+. 
+. cap drop seq first_event_row _merge
+
+. 
+. rename dominant_mode weekly_dominant_mode
+
+. rename is_multigen_acs share_multigen_acs 
+
+. rename is_multigen_proxy share_multigen_proxy
+
+. 
+. * merge in states
+. cd "`path_econ80'/data/temp"
+/Users/thomasli/Desktop/econ-80-paper/data/temp
+
+. merge m:1 fips using xwalk_fips_to_state
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                           231
+        from master                         0  (_merge==1)
+        from using                        231  (_merge==2)
+
+    Matched                           100,138  (_merge==3)
+    -----------------------------------------
+
+. keep if _merge == 3
+(231 observations deleted)
+
+. drop _merge
+
+. 
+. * generate regions from Ertem et al. (2021)
+. gen region = 0 if inlist(state, "PA", "NY", "VT", "NH", "NJ", "MA", "CT", "RI", "ME")
+(91,457 missing values generated)
+
+. replace region = 1 if inlist(state, "AK", "WA", "OR", "CA", "ID")
+(5,998 real changes made)
+
+. replace region = 1 if inlist(state,"NV", "MT", "WY", "UT", "AZ", "CO", "NM")
+(7,181 real changes made)
+
+. replace region = 2 if inlist(state, "ND", "SD", "NE", "KS", "MN", "IA")
+(16,050 real changes made)
+
+. replace region = 2 if inlist(state,"MO", "WI", "IL", "IN", "MI", "OH")
+(19,052 real changes made)
+
+. replace region = 3 if inlist(state, "OK", "TX", "AR", "LA", "KY", "TN","NC", "SC") 
+(24,380 real changes made)
+
+. replace region = 3 if inlist(state,"MS", "AL", "GA", "FL", "WV", "MD", "DC", "VA") 
+(18,587 real changes made)
+
+. /* Here, 0 for Northeast, 1 for West, 2 for Midwest, 3 for South. */
+. 
+. * fill in missing regions from pre-school-year period
+. egen region_new = mean(region), by(fips)
+(209 missing values generated)
+
+. tab region_new 
+
+ region_new |      Freq.     Percent        Cum.
+------------+-----------------------------------
+          0 |      8,681        8.69        8.69
+          1 |     13,179       13.19       21.88
+          2 |     35,102       35.13       57.00
+          3 |     42,967       43.00      100.00
+------------+-----------------------------------
+      Total |     99,929      100.00
+
+. drop if region_new == .
+(209 observations deleted)
+
+. 
+. drop region 
+
+. rename region_new region
+
+. label var region "0=northeast, 1=west, 2=midwest, 3=south
+
+. 
+. * make multigen ratios in percentage points
+. gen share_multigen_acs_pp = share_multigen_acs * 100
+(6,579 missing values generated)
+
+. gen share_multigen_proxy_pp = share_multigen_proxy * 100
+(6,579 missing values generated)
+
+. 
+. * merge in urbanicity
+. codebook fips
+
+----------------------------------------------------------------------------------------------
+fips                                                                               (unlabeled)
+----------------------------------------------------------------------------------------------
+
+                  Type: Numeric (long)
+
+                 Range: [1001,56045]                  Units: 1
+         Unique values: 2,982                     Missing .: 0/99,929
+
+                  Mean: 29700.8
+             Std. dev.: 14649.4
+
+           Percentiles:     10%       25%       50%       75%       90%
+                          12021     19065     28147     42031     48457
+
+. 
+. cd "`path_econ80'/data/clean"
+/Users/thomasli/Desktop/econ-80-paper/data/clean
+
+. merge m:1 fips using urbanicity_fips
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                           239
+        from master                         0  (_merge==1)
+        from using                        239  (_merge==2)
+
+    Matched                            99,929  (_merge==3)
+    -----------------------------------------
+
+. drop if _merge == 2
+(239 observations deleted)
+
+. drop _merge 
+
+. 
+. * save clean data without subsetting event-time to between -4 and 12
+. cd "`path_econ80'/data/merged"
+/Users/thomasli/Desktop/econ-80-paper/data/merged
+
+. save e80_merged, replace
+file e80_merged.dta saved
+
+. 
+. 
+. 
+end of do-file
+
+. do "/var/folders/d9/9b0y13450cd8p0y0dkk34phc0000gn/T//SD58383.000000"
+
+. clear
+
+. set more off
+
+. pause on
+
+. capture log close

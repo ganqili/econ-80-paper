@@ -1,0 +1,886 @@
+--------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/thomasli/Desktop/econ-80-paper/outputs/logs/03_graph.l
+> og
+  log type:  text
+ opened on:  30 Nov 2024, 11:24:19
+
+. 
+. * program to analyze merged data for econ 80
+. * author: Ganqi Li (ganqi.li.25@dartmouth.edu)
+. * updated: Nov 26, 2024 
+. 
+. /*
+> 00. Datasets required
+> 
+> Data: 
+> 1. merged data in "/data/merged": e80_merged.dta
+> */
+. 
+. * open merged data
+. cd "`path_econ80'/data/merged"
+/Users/thomasli/Desktop/econ-80-paper/data/merged
+
+. use e80_merged, clear
+
+. 
+. * follow Ertem et al. in focusing on -5 to 20 weeks from start of school
+. keep if (event_time >= -5) & (event_time <= 36)
+(24,772 observations deleted)
+
+. // keep if (event_time >= -5) & (event_time <= 13)
+. 
+. * check data availability by week
+. tab event_time if adult_covid_week_avg_100k != .
+
+ event_time |      Freq.     Percent        Cum.
+------------+-----------------------------------
+         -5 |      1,820        2.65        2.65
+         -4 |      1,829        2.67        5.32
+         -3 |      1,836        2.68        8.00
+         -2 |      1,846        2.69       10.69
+         -1 |      1,848        2.69       13.38
+          0 |      1,855        2.70       16.09
+          1 |      1,854        2.70       18.79
+          2 |      1,854        2.70       21.50
+          3 |      1,854        2.70       24.20
+          4 |      1,852        2.70       26.90
+          5 |      1,846        2.69       29.59
+          6 |      1,846        2.69       32.28
+          7 |      1,845        2.69       34.97
+          8 |      1,845        2.69       37.66
+          9 |      1,809        2.64       40.30
+         10 |      1,807        2.63       42.94
+         11 |      1,805        2.63       45.57
+         12 |      1,805        2.63       48.20
+         13 |      1,681        2.45       50.65
+         14 |      1,675        2.44       53.09
+         15 |      1,675        2.44       55.54
+         16 |      1,675        2.44       57.98
+         17 |      1,673        2.44       60.42
+         18 |      1,555        2.27       62.69
+         19 |      1,555        2.27       64.95
+         20 |      1,554        2.27       67.22
+         21 |      1,554        2.27       69.49
+         22 |      1,422        2.07       71.56
+         23 |      1,422        2.07       73.63
+         24 |      1,422        2.07       75.71
+         25 |      1,421        2.07       77.78
+         26 |      1,418        2.07       79.85
+         27 |      1,417        2.07       81.91
+         28 |      1,417        2.07       83.98
+         29 |      1,417        2.07       86.05
+         30 |      1,408        2.05       88.10
+         31 |      1,395        2.03       90.13
+         32 |      1,395        2.03       92.17
+         33 |      1,395        2.03       94.20
+         34 |      1,393        2.03       96.23
+         35 |      1,295        1.89       98.12
+         36 |      1,289        1.88      100.00
+------------+-----------------------------------
+      Total |     68,579      100.00
+
+. 
+. * shift event time by 5 so it can be controlled as indicator 
+. gen evttime_plus5 = event_time + 5
+
+. 
+. * keep data before end of year
+. // keep if week_sunday <= date("2020-12-31", "YMD")
+. summ week_sunday, format
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+ week_sunday |     68,579   27nov2020    85.06609  07jun2020  27jun2021
+
+. 
+. 
+. 
+. /*
+> 01. Explore correlations of multi shares
+> */
+. 
+. /*
+> preserve
+> collapse (mean) share_multigen_acs share_multigen_proxy, by(fips)
+> twoway scatter share_multigen_proxy share_multigen_acs, ///
+>         xtitle("Share of multigenerational households (ACS)") ///
+>         ytitle("Share of households with both ages 5-18 and 65+") ///
+>         xscale(range(0 0.13)) ///
+>         yscale(range(0 0.05)) ///
+>         xlabel(0(0.01)0.13) ///
+>         ylabel(0(0.01)0.05) ///
+> 
+> cd "`path_econ80'/outputs/graphs/graph_gph"
+> graph save acs_proxy_corr, replace
+> restore
+> */
+. 
+. 
+. /*
+> 02. Explore hospitalization across different quartiles of multigen
+> */
+. 
+. * plot trend of hospitalization for multigen quartiles (ACS)
+. preserve
+
+. collapse (mean) mean_covid = adult_covid_week_avg_100k (semean) ///
+>         se_covid = adult_covid_week_avg_100k, by(quartile_multigen_acs e
+> vent_time)
+
+. drop if mean_covid == .
+(30 observations deleted)
+
+. 
+. * calculate std error caps
+. gen upper = mean_covid + se_covid * 1.96
+
+. gen lower = mean_covid - se_covid * 1.96
+
+. 
+. local offset_inner 0.05
+
+. local offser_outer 0.1
+
+. gen evttime_offset = event_time - `offset_inner' - `offser_outer' ///
+>         if quartile_multigen_acs == 1
+(126 missing values generated)
+
+. replace evttime_offset = event_time - `offset_inner' ///
+>         if quartile_multigen_acs == 2
+(42 real changes made)
+
+. replace evttime_offset = event_time + `offset_inner' ///
+>         if quartile_multigen_acs == 3
+(42 real changes made)
+
+. replace evttime_offset = event_time + `offset_inner' + `offser_outer' //
+> /
+>         if quartile_multigen_acs == 4
+(42 real changes made)
+
+. 
+. twoway ///
+>     (line mean_covid evttime_offset if quartile_multigen_acs == 1, ///
+>         lcolor(blue) lpattern(shortdash)) ///
+>     (line mean_covid evttime_offset if quartile_multigen_acs == 2, ///
+>         lcolor(purple) lpattern(dash)) ///   
+>     (line mean_covid evttime_offset if quartile_multigen_acs == 3, ///
+>         lcolor(orange) lpattern(longdash)) ///  
+>     (line mean_covid evttime_offset if quartile_multigen_acs == 4, ///
+>         lcolor(red) lpattern(solid)), ///           
+>         xline(16.5, lwidth(6.5) lc(gs14) lpattern(solid)) ///
+>         text(1 16.5 "Winter break", place(center) size(small) color(blac
+> k)) /// 
+>         xline(0, lwidth(3.25) lc(gs14) lpattern(solid)) ///
+>         text(1 0 "First week", place(center) size(small) color(black)) /
+> //
+>     legend(order(1 "1st quartile" 2 "2nd quartile" 3 "3rd quartile" 4 "4
+> th quartile") ///
+>            region(lstyle(none)) pos(6) col(4)) ///
+>     ytitle("Adult hospitalization per 100,000 residents") ///
+>     xtitle("Weeks from school opening") ///
+>     title("Hospitalization by Share of Multigenerational Households (ACS
+> )") ///
+>         nodraw
+
+.         
+. //      ylabel(0(5)25) ///
+. //      xlabel(-4(1)12) ///
+. //      xscale(range(-4.5 12.5)) ///
+. //      yscale(range(0 26.5)) ///
+.         
+. cd "`path_econ80'/outputs/graphs/graph_gph"
+/Users/thomasli/Desktop/econ-80-paper/outputs/graphs/graph_gph
+
+. graph save hospitalization_by_multigen_acs, replace
+file hospitalization_by_multigen_acs.gph saved
+
+. restore 
+
+. 
+. * plot trend of hospitalization for multigen quartiles (Proxy)
+. preserve
+
+. collapse (mean) mean_covid = adult_covid_week_avg_100k (semean) ///
+>         se_covid = adult_covid_week_avg_100k, by(quartile_multigen_proxy
+>  event_time)
+
+. drop if mean_covid == .
+(30 observations deleted)
+
+. 
+. * calculate std error caps
+. gen upper = mean_covid + se_covid * 1.96
+
+. gen lower = mean_covid - se_covid * 1.96
+
+. 
+. local offset_inner 0.05
+
+. local offser_outer 0.1
+
+. gen evttime_offset = event_time - `offset_inner' - `offser_outer' ///
+>         if quartile_multigen_proxy == 1
+(126 missing values generated)
+
+. replace evttime_offset = event_time - `offset_inner' ///
+>         if quartile_multigen_proxy == 2
+(42 real changes made)
+
+. replace evttime_offset = event_time + `offset_inner' ///
+>         if quartile_multigen_proxy == 3
+(42 real changes made)
+
+. replace evttime_offset = event_time + `offset_inner' + `offser_outer' //
+> /
+>         if quartile_multigen_proxy == 4
+(42 real changes made)
+
+. 
+. twoway ///
+>     (line mean_covid evttime_offset if quartile_multigen_proxy == 1, ///
+>         lcolor(blue) lpattern(shortdash)) ///
+>     (line mean_covid evttime_offset if quartile_multigen_proxy == 2, ///
+>         lcolor(purple) lpattern(dash)) ///   
+>     (line mean_covid evttime_offset if quartile_multigen_proxy == 3, ///
+>         lcolor(orange) lpattern(longdash)) ///  
+>     (line mean_covid evttime_offset if quartile_multigen_proxy == 4, ///
+>         lcolor(red) lpattern(solid)), ///                
+>     legend(order(1 "1st quartile" 2 "2nd quartile" 3 "3rd quartile" 4 "4
+> th quartile") ///
+>            region(lstyle(none)) pos(6) col(4)) ///
+>         xline(16.5, lwidth(6.5) lc(gs14) lpattern(solid)) ///
+>         text(1 16.5 "Winter break", place(center) size(small) color(blac
+> k)) /// 
+>         xline(0, lwidth(3.25) lc(gs14) lpattern(solid)) ///
+>         text(1 0 "First week", place(center) size(small) color(black)) /
+> //
+>     ytitle("Adult hospitalization per 100,000 residents") ///
+>     xtitle("Weeks from school opening") ///
+>     title("Hospitalization by Share of Households with Ages 5-18 and 65+
+> ") ///
+>         nodraw
+
+.         
+. 
+. //      ylabel(0(5)25) ///
+. //      xlabel(-4(1)12) ///
+. //      xscale(range(-4.5 12.5)) ///
+. //      yscale(range(0 26.5)) ///
+. 
+. cd "`path_econ80'/outputs/graphs/graph_gph"
+/Users/thomasli/Desktop/econ-80-paper/outputs/graphs/graph_gph
+
+. graph save hospitalization_by_multigen_proxy, replace
+file hospitalization_by_multigen_proxy.gph saved
+
+. restore 
+
+. 
+. 
+. 
+. /*
+> 03. Explore hospitalization across different modes
+> */
+. 
+. * graph hospitalization by weekly dominant mode
+. preserve
+
+. * collapse mean hospitalization on county dominant mode and event time
+. collapse (mean) mean_covid = adult_covid_week_avg_100k (semean) ///
+>         se_covid = adult_covid_week_avg_100k, by(weekly_dominant_mode ev
+> ent_time)
+
+. drop if mean_covid == .
+(0 observations deleted)
+
+. sort weekly_dominant_mode event_time
+
+. 
+. * offset for better visualization
+. local offset 0.13
+
+. gen evttime_offset = event_time
+
+. replace evttime_offset = event_time + `offset' if weekly_dominant_mode =
+> = 2
+(37 real changes made)
+
+. replace evttime_offset = event_time - `offset' if weekly_dominant_mode =
+> = 0
+(37 real changes made)
+
+. 
+. * calculate std error caps
+. gen upper = mean_covid + se_covid * 1.96
+
+. gen lower = mean_covid - se_covid * 1.96
+
+. 
+. twoway ///
+>     (rcap lower upper evttime_offset if weekly_dominant_mode == 0, ///
+>         lcolor(gs10)) ///
+>     (line mean_covid evttime_offset if weekly_dominant_mode == 0, ///
+>         lcolor(gs10) lpattern(shortdash)) ///
+>     (rcap lower upper evttime_offset if weekly_dominant_mode == 1, ///
+>         lcolor(gs6)) ///
+>     (line mean_covid evttime_offset if weekly_dominant_mode == 1, ///
+>         lcolor(gs6) lpattern(dash)) ///
+>     (rcap lower upper evttime_offset if weekly_dominant_mode == 2, ///
+>         lcolor(gs2)) ///
+>     (line mean_covid evttime_offset if weekly_dominant_mode == 2, ///
+>         lcolor(gs2) lpattern(longdash)), ///
+>         xline(16.5, lwidth(6.5) lc(gs14) lpattern(solid)) ///
+>         text(1 16.5 "Winter break", place(center) size(small) color(blac
+> k)) /// 
+>         xline(0, lwidth(3.25) lc(gs14) lpattern(solid)) ///
+>         text(1 0 "First week", place(center) size(small) color(black)) /
+> //
+>     legend(order(2 "Virtual" 4 "Hybrid" 6 "In-person")) ///
+>     ytitle("Adult hospitalization per 100,000 residents") ///
+>     xtitle("Weeks from school opening") ///
+>     title("Mean Adult Hospitalization Level by Weekly Dominant School Mo
+> de") ///
+>     graphregion(color(white)) ///
+>     note("Note: Error bars represent 95% confidence intervals.") ///
+>     xlabel(-5(5)36) ///
+>     xscale(range(-5.5 36.5))
+
+. 
+. //      ylabel(0(5)25) ///
+. //     xlabel(-4(1)12) ///
+. //      xscale(range(-4.5 12.5)) ///
+. //      yscale(range(0 26.5)) ///
+. 
+. * save trend graph
+. cd "`path_econ80'/outputs/graphs/graph_gph"
+/Users/thomasli/Desktop/econ-80-paper/outputs/graphs/graph_gph
+
+. graph save hospitalization_by_weekly_mode_rcap, replace
+file hospitalization_by_weekly_mode_rcap.gph saved
+
+. restore
+
+. 
+. * graph hospitalization by county dominant mode
+. preserve
+
+. * collapse mean hospitalization on county dominant mode and event time
+. collapse (mean) mean_covid = adult_covid_week_avg_100k (semean) ///
+>         se_covid = adult_covid_week_avg_100k, by(county_dominant_mode ev
+> ent_time)
+
+. drop if mean_covid == .
+(0 observations deleted)
+
+. sort county_dominant_mode event_time
+
+. 
+. * offset for better visualization
+. local offset 0.13
+
+. gen evttime_offset = event_time
+
+. replace evttime_offset = event_time + `offset' if county_dominant_mode =
+> = 2
+(42 real changes made)
+
+. replace evttime_offset = event_time - `offset' if county_dominant_mode =
+> = 0
+(42 real changes made)
+
+. 
+. * calculate std error caps
+. gen upper = mean_covid + se_covid * 1.96
+
+. gen lower = mean_covid - se_covid * 1.96
+
+. 
+. * plot line graphs with 95% confidence intervals
+. twoway ///
+>     (rcap lower upper evttime_offset if county_dominant_mode == 0, ///
+>         lcolor(gs10)) ///
+>     (line mean_covid evttime_offset if county_dominant_mode == 0, ///
+>         lcolor(gs10) lpattern(shortdash)) ///
+>     (rcap lower upper evttime_offset if county_dominant_mode == 1, ///
+>         lcolor(gs6)) ///
+>     (line mean_covid evttime_offset if county_dominant_mode == 1, ///
+>         lcolor(gs6) lpattern(dash)) ///
+>     (rcap lower upper evttime_offset if county_dominant_mode == 2, ///
+>         lcolor(gs2)) ///
+>     (line mean_covid evttime_offset if county_dominant_mode == 2, ///
+>         lcolor(gs2) lpattern(longdash)), /// 
+>         xline(0, lwidth(3.25) lc(gs14) lpattern(solid)) ///
+>         text(1 0 "First week", place(center) size(small) color(black)) /
+> //
+>         xline(16.5, lwidth(6.5) lc(gs14) lpattern(solid)) ///
+>         text(1 16.5 "Winter break", place(center) size(small) color(blac
+> k)) /// 
+>     legend(order(2 "Virtual" 4 "Hybrid" 6 "In-person")) ///
+>     ytitle("Adult hospitalization per 100,000 residents") ///
+>     xtitle("Weeks from school opening") ///
+>     title("Mean Adult Hospitalization Level by County Dominant School Mo
+> de") ///
+>     graphregion(color(white)) ///
+>         note("Note: Error bars represent 95% confidence intervals.") ///
+>         xlabel(-5(5)36) /// 
+>     xscale(range(-5.5 36.5))
+
+.         
+. //      ylabel(0(5)25) ///
+. //     xlabel(-4(1)12) ///
+. //      xscale(range(-4.5 12.5)) ///
+. //      yscale(range(0 26.5)) ///
+. 
+. * save trend graph
+. cd "`path_econ80'/outputs/graphs/graph_gph"
+/Users/thomasli/Desktop/econ-80-paper/outputs/graphs/graph_gph
+
+. graph save hospitalization_by_county_mode_rcap, replace
+file hospitalization_by_county_mode_rcap.gph saved
+
+. restore
+
+. 
+. * create only line graph and no rcaps
+. preserve
+
+. collapse (mean) adult_covid_week_avg_100k, by(county_dominant_mode event
+> _time)
+
+. drop if adult_covid_week_avg_100k == .
+(0 observations deleted)
+
+. sort county_dominant_mode event_time
+
+. 
+. * set as panel data structure for change in hospitalization 
+. tsset county_dominant_mode event_time
+
+Panel variable: county_dominant_mode (strongly balanced)
+ Time variable: event_time, -5 to 36
+         Delta: 1 unit
+
+. gen d_adult_covid_week_avg_100k = D.adult_covid_week_avg_100k
+(3 missing values generated)
+
+. 
+. twoway (line adult_covid_week_avg_100k event_time if county_dominant_mod
+> e == 0, ///
+>                 lcolor(blue) lpattern(shortdash)) ///
+>         (line adult_covid_week_avg_100k event_time if county_dominant_mo
+> de == 1, ///
+>                 lcolor(orange) lpattern(dash)) ///
+>         (line adult_covid_week_avg_100k event_time if county_dominant_mo
+> de == 2, ///
+>                 lcolor(red) lpattern(longdash)), ///
+>         legend(order(1 "Virtual" 2 "Hybrid" 3 "In-person")) ///
+>         ytitle("Adult hospitalization per 100,000 residents") ///
+>         xtitle("Weeks from school opening") ///
+>         title("Mean Adult Hospitalization Level by School Mode") ///
+>         graphregion(color(white)) ///
+>         nodraw
+
+.         
+. //      ylabel(0(5)25) ///
+. //      xlabel(-4(1)12) ///
+. 
+. * save trend graph
+. cd "`path_econ80'/outputs/graphs/graph_gph"
+/Users/thomasli/Desktop/econ-80-paper/outputs/graphs/graph_gph
+
+. graph save hospitalization_by_mode, replace
+file hospitalization_by_mode.gph saved
+
+.         
+. twoway (line d_adult_covid_week_avg_100k event_time if county_dominant_m
+> ode == 0, ///
+>                 lcolor(blue) lpattern(shortdash)) ///
+>         (line d_adult_covid_week_avg_100k event_time if county_dominant_
+> mode == 1, ///
+>                 lcolor(orange) lpattern(dash)) ///
+>         (line d_adult_covid_week_avg_100k event_time if county_dominant_
+> mode == 2, ///
+>                 lcolor(red) lpattern(longdash)), ///
+>         legend(order(1 "Virtual" 2 "Hybrid" 3 "In-person")) ///
+>         ytitle("Change in adult hospitalization per 100,000 residents") 
+> ///
+>         xtitle("Weeks from school opening") ///
+>         title("Change in Mean Adult Hospitalization Level by School Mode
+> ") ///
+>         graphregion(color(white)) ///
+>         nodraw
+
+.         
+. //      ylabel(-5(5)10) ///
+. //      xlabel(-4(1)12) ///
+. 
+. graph save d_hospitalization_by_mode, replace
+file d_hospitalization_by_mode.gph saved
+
+. restore
+
+. 
+. 
+. 
+. /*
+> 04. Explore relationship between household and school mode
+> */
+. 
+. local vars share_5_to_18 share_50_above share_65_above ///
+>         urban_share share_inperson share_hybrid share_virtual
+
+. 
+. foreach var in `vars' {
+  2.     gen `var'_pp = `var' * 100
+  3. }
+(6,578 missing values generated)
+(6,578 missing values generated)
+(6,578 missing values generated)
+
+. 
+. preserve
+
+. keep if event_time == 0
+(72,458 observations deleted)
+
+. gen firstweek_virtual = (weekly_dominant_mode == 0)
+
+. corr share_multigen_acs_pp adult_covid_week_avg_100k firstweek_virtual /
+> //
+>         share_virtual share_65_above_pp share_50_above_pp share_5_to_18_
+> pp
+(obs=1,855)
+
+             | sha~s_pp adu~100k firstw~l share_~l share_.. share_..
+-------------+------------------------------------------------------
+share_m~s_pp |   1.0000
+adult_c~100k |   0.1180   1.0000
+firstweek_~l |   0.1258   0.0947   1.0000
+share_virt~l |   0.1140   0.0982   0.9652   1.0000
+share_65_a~p |  -0.3746  -0.0765  -0.1479  -0.1517   1.0000
+share_50_a~p |  -0.3892  -0.0866  -0.1452  -0.1478   0.9655   1.0000
+share_5_to~p |   0.4639   0.0574   0.0166   0.0083  -0.5555  -0.5561
+
+             | sha~8_pp
+-------------+---------
+share_5_to~p |   1.0000
+
+
+. corr share_multigen_acs_pp  share_50_above_pp share_5_to_18_pp ///
+>         adult_covid_week_avg_100k firstweek_virtual
+(obs=1,855)
+
+             | sha~s_pp share_.. sha~8_pp adu~100k firstw~l
+-------------+---------------------------------------------
+share_m~s_pp |   1.0000
+share_50_a~p |  -0.3892   1.0000
+share_5_to~p |   0.4639  -0.5561   1.0000
+adult_c~100k |   0.1180  -0.0866   0.0574   1.0000
+firstweek_~l |   0.1258  -0.1452   0.0166   0.0947   1.0000
+
+
+. 
+. * see effect of multigen on school mode
+. logit firstweek_virtual share_multigen_acs_pp
+
+Iteration 0:  Log likelihood = -945.98607  
+Iteration 1:  Log likelihood = -933.08971  
+Iteration 2:  Log likelihood = -932.75364  
+Iteration 3:  Log likelihood = -932.75363  
+
+Logistic regression                                     Number of obs =  1
+> ,855
+                                                        LR chi2(1)    =  2
+> 6.46
+                                                        Prob > chi2   = 0.
+> 0000
+Log likelihood = -932.75363                             Pseudo R2     = 0.
+> 0140
+
+--------------------------------------------------------------------------
+> ----
+firstweek_~l | Coefficient  Std. err.      z    P>|z|     [95% conf. inter
+> val]
+-------------+------------------------------------------------------------
+> ----
+share_m~s_pp |   .3771966   .0732806     5.15   0.000     .2335694    .520
+> 8239
+       _cons |  -2.956937   .3218799    -9.19   0.000     -3.58781   -2.32
+> 6064
+--------------------------------------------------------------------------
+> ----
+
+. logit firstweek_virtual share_multigen_acs_pp ///
+>         share_50_above_pp share_5_to_18_pp urban_share_pp
+
+Iteration 0:  Log likelihood = -945.98607  
+Iteration 1:  Log likelihood = -892.01607  
+Iteration 2:  Log likelihood = -889.85474  
+Iteration 3:  Log likelihood = -889.85331  
+Iteration 4:  Log likelihood = -889.85331  
+
+Logistic regression                                     Number of obs =  1
+> ,855
+                                                        LR chi2(4)    = 11
+> 2.27
+                                                        Prob > chi2   = 0.
+> 0000
+Log likelihood = -889.85331                             Pseudo R2     = 0.
+> 0593
+
+--------------------------------------------------------------------------
+> ----
+firstweek_~l | Coefficient  Std. err.      z    P>|z|     [95% conf. inter
+> val]
+-------------+------------------------------------------------------------
+> ----
+share_m~s_pp |   .2646131    .086143     3.07   0.002     .0957758    .433
+> 4503
+share_50_a~p |  -.0994416   .0285373    -3.48   0.000    -.1553737   -.043
+> 5095
+share_5_to~p |  -.2311039   .0810401    -2.85   0.004    -.3899396   -.072
+> 2681
+urban_shar~p |   .0136185   .0019896     6.84   0.000      .009719    .017
+> 5181
+       _cons |   4.713215   2.149584     2.19   0.028     .5001086    8.92
+> 6322
+--------------------------------------------------------------------------
+> ----
+
+. 
+. codebook fips
+
+--------------------------------------------------------------------------
+fips                                                           (unlabeled)
+--------------------------------------------------------------------------
+
+                  Type: Numeric (long)
+
+                 Range: [1001,56045]                  Units: 1
+         Unique values: 2,699                     Missing .: 0/2,699
+
+                  Mean: 31363.9
+             Std. dev.: 15189.5
+
+           Percentiles:     10%       25%       50%       75%       90%
+                          12095     20023     29225     47037     51093
+
+. su firstweek_virtual if share_multigen_acs_pp == .
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+firstweek_~l |        844    .1635071     .370047          0          1
+
+. su firstweek_virtual if share_multigen_acs_pp != .
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+firstweek_~l |      1,855    .2070081    .4052706          0          1
+
+. 
+. * create summary statistics for the first week
+. su adult_covid_week_avg_100k urban_share_pp share_multigen_acs_pp ///
+>         share_50_above_pp share_5_to_18_pp /// 
+>         share_inperson_pp share_hybrid_pp share_virtual_pp
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+adult_c~100k |      1,855      8.1889    17.11728          0   246.4711
+urban_shar~p |      2,699    35.85117    33.67121          0        100
+share_m~s_pp |      1,855    4.226448    .7245365   2.056836    12.1436
+share_50_a~p |      1,855    37.41087    2.414909   18.04854   54.30459
+share_5_to~p |      1,855    17.82585    .8462023   12.29012   26.49684
+-------------+---------------------------------------------------------
+share_inpe~p |      2,699    51.99815    45.44704          0        100
+share_hybr~p |      2,699    28.37579     39.5708          0        100
+share_virt~p |      2,699    19.62606    36.41721          0        100
+
+. restore
+
+. 
+. 
+. * graph multigen shares by school mode
+. preserve
+
+. collapse (mean) share_multigen_acs share_multigen_proxy county_dominant_
+> mode, by(fips)
+
+. 
+. collapse (mean) mean_acs = share_multigen_acs mean_proxy = share_multige
+> n_proxy ///
+>         (semean) se_acs = share_multigen_acs se_proxy = share_multigen_p
+> roxy, ///
+>         by(county_dominant_mode)
+
+. 
+. * create high and low error bounds for 95% confidence interval
+. gen rcap_h_acs = mean_acs + 1.96 * se_acs
+
+. gen rcap_l_acs = mean_acs - 1.96 * se_acs 
+
+. 
+. gen rcap_h_proxy = mean_proxy + 1.96 * se_acs
+
+. gen rcap_l_proxy = mean_proxy - 1.96 * se_acs
+
+. 
+. * Create a combined plot with both variables (share_multigen_acs and sha
+> re_multigen_proxy)
+. twoway (rcap rcap_l_acs rcap_h_acs county_dominant_mode, ///
+>         lcolor(blue) lwidth(medium)) ///
+>         (scatter mean_acs county_dominant_mode, mcolor(blue) msize(mediu
+> m)), ///
+>         legend(order(1 "95% confidence interval (ACS)") position(6)) ///
+>                 ytitle("Share of multigenerational households") ///
+>                 xtitle("Dominant county school mode") ///
+>                         xlabel(0 "Virtual" 1 "Hybrid" 2 "In-Person", nog
+> rid) ///
+>                         ylabel(0.041(0.001)0.047) ///
+>                                 xscale(range(-0.1 2.1)) ///
+>                                 yscale(range(0.041 0.047)) ///
+>                                         nodraw
+
+.            
+. * save graph on household and school mode relationship
+. cd "`path_econ80'/outputs/graphs/graph_gph"
+/Users/thomasli/Desktop/econ-80-paper/outputs/graphs/graph_gph
+
+. graph save multigen_mode_acs, replace
+file multigen_mode_acs.gph saved
+
+.            
+. twoway (rcap rcap_l_proxy rcap_h_proxy county_dominant_mode, ///
+>         lcolor(red) lwidth(medium) lpattern(dash)) ///
+>     (scatter mean_proxy county_dominant_mode, mcolor(red) msize(medium))
+> , ///
+>         legend(order(1 "95% confidence interval (ages 5-18 and 65+)") po
+> sition(6)) ///
+>                 xtitle("Dominant county school mode") ///
+>                 xlabel(0 "Virtual" 1 "Hybrid" 2 "In-Person", nogrid) ///
+>                 ylabel(0.015(0.001)0.021) ///
+>                         xscale(range(-0.1 2.1)) ///
+>                         yscale(range(0.015 0.021)) ///
+>                                 nodraw 
+
+. 
+. graph save multigen_mode_proxy, replace
+file multigen_mode_proxy.gph saved
+
+. 
+. * save combined graph for acs and proxy
+. graph combine "`path_econ80'/outputs/graphs/graph_gph/multigen_mode_acs.
+> gph" ///
+>         "`path_econ80'/outputs/graphs/graph_gph/multigen_mode_proxy.gph"
+> , ///
+>         row(1) col(2) ///
+>         title("Share of Multigenerational Households across Counties") /
+> //
+>         ysize(6) xsize(8) ///
+>         nodraw
+
+. 
+. graph save combined_multigen_mode, replace
+file combined_multigen_mode.gph saved
+
+. restore
+
+. 
+. 
+. * collapse multigen by fips and mode
+. preserve
+
+. collapse (mean) share_multigen_acs share_multigen_proxy, by(fips county_
+> dominant_mode)
+
+. su share_multigen_acs share_multigen_proxy
+
+    Variable |        Obs        Mean    Std. dev.       Min        Max
+-------------+---------------------------------------------------------
+share_mult~s |      1,856     .042261     .007245   .0205684    .121436
+share_mult~y |      1,856    .0162419    .0032753    .009638   .0458196
+
+. bysort county_dominant_mode: gen obs_count = _N
+
+. 
+. * create jittered x-values
+. set seed 12345
+
+. gen jittered_mode = county_dominant_mode + (runiform() - 0.5) * 0.5
+
+. 
+. * scatter multigen acs ratios
+. twoway /// 
+>     (scatter share_multigen_acs jittered_mode if county_dominant_mode ==
+>  0, /// 
+>         msymbol(circle_hollow) /// 
+>         mcolor(blue) ///
+>         msize(medium)) ///  
+>     (scatter share_multigen_acs jittered_mode if county_dominant_mode ==
+>  1, /// 
+>         msymbol(circle_hollow) /// 
+>         mcolor(purple) ///
+>         msize(medium)) /// 
+>     (scatter share_multigen_acs jittered_mode if county_dominant_mode ==
+>  2, /// 
+>         msymbol(circle_hollow) /// 
+>         mcolor(red) ///
+>         msize(medium)), /// 
+>     ytitle("Share of multigenerational households") /// 
+>     xtitle("Dominant county school mode") /// 
+>     xlabel(0 "Virtual" 1 "Hybrid" 2 "In-Person", nogrid) /// 
+>     ylabel(0(0.02)0.14, format(%5.3f)) /// 
+>     xscale(range(-0.1 2.1)) ///
+>         yscale(range(0 0.14)) ///
+>     graphregion(color(white)) /// 
+>     title("Share of Multigenerational Households (ACS)") ///
+>         legend(off)
+
+.         
+. cd "`path_econ80'/outputs/graphs/graph_gph"
+/Users/thomasli/Desktop/econ-80-paper/outputs/graphs/graph_gph
+
+. graph save acs_multigen_scatter, replace
+file acs_multigen_scatter.gph saved
+
+. 
+. * scatter multigen proxy ratios
+. twoway /// 
+>     (scatter share_multigen_proxy jittered_mode if county_dominant_mode 
+> == 0, /// 
+>         msymbol(circle_hollow) /// 
+>         mcolor(blue) ///
+>         msize(medium)) ///  
+>     (scatter share_multigen_proxy jittered_mode if county_dominant_mode 
+> == 1, /// 
+>         msymbol(circle_hollow) /// 
+>         mcolor(purple) ///
+>         msize(medium)) /// 
+>     (scatter share_multigen_proxy jittered_mode if county_dominant_mode 
+> == 2, /// 
+>         msymbol(circle_hollow) /// 
+>         mcolor(red) ///
+>         msize(medium)), /// 
+>     ytitle("Share of multigenerational households") /// 
+>     xtitle("Dominant county school mode") ///  
+>     xlabel(0 "Virtual" 1 "Hybrid" 2 "In-Person", nogrid) /// 
+>     ylabel(0(0.01)0.05, format(%5.3f)) /// // ylabel(0(0.02)0.14, format
+> (%5.3f))
+>     xscale(range(-0.1 2.1)) /// 
+>         yscale(range(0 0.05)) /// // yscale(range(0 0.14)) 
+>     graphregion(color(white)) /// 
+>     title("Share of Households with Ages 5-18 and 65+") ///
+>         legend(off)
+
+. 
+. graph save proxy_multigen_scatter, replace
+file proxy_multigen_scatter.gph saved
+
+. restore
+
+. 
+. 
+end of do-file
+
+. exit, clear
